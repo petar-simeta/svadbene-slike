@@ -36,6 +36,7 @@ export default function ImageGallery({ showTags }: ImageGalleryProps) {
   const [loading, setLoading] = useState(true);
   const [imageLoading, setImageLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [totalImages, setTotalImages] = useState(0);
 
   useEffect(() => {
     fetchImages();
@@ -111,6 +112,7 @@ export default function ImageGallery({ showTags }: ImageGalleryProps) {
 
       setImages(imageData);
       setFilteredImages(imageData);
+      setTotalImages(data.total || imageData.length);
     } catch (error) {
       console.error("Error fetching images:", error);
       setError(
@@ -172,13 +174,12 @@ export default function ImageGallery({ showTags }: ImageGalleryProps) {
 
   if (loading) {
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-        {Array.from({ length: 15 }).map((_, i) => (
-          <div
-            key={i}
-            className="aspect-square bg-muted animate-pulse rounded-lg"
-          />
-        ))}
+      <div className="text-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+        <p className="text-muted-foreground">Učitavaju se dodatne slike...</p>
+        <p className="text-sm text-muted-foreground mt-2">
+          Možda potraje par sekundica, ali evoooo.....
+        </p>
       </div>
     );
   }
@@ -205,6 +206,7 @@ export default function ImageGallery({ showTags }: ImageGalleryProps) {
           Try a different category or search term.
         </p>
         <div className="mt-4 text-sm text-muted-foreground">
+          <p>Total images loaded: {totalImages}</p>
           <p>Current filters:</p>
           <p>Category: {searchParams.get("category") || "all"}</p>
           <p>Search: {searchParams.get("search") || "none"}</p>
@@ -215,6 +217,12 @@ export default function ImageGallery({ showTags }: ImageGalleryProps) {
 
   return (
     <>
+      <div className="mb-4 text-center">
+        <p className="text-sm text-muted-foreground">
+          Prikazuje se {filteredImages.length} od {totalImages} slika
+        </p>
+      </div>
+
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
         {filteredImages.map((image) => (
           <div
@@ -266,9 +274,7 @@ export default function ImageGallery({ showTags }: ImageGalleryProps) {
                 <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-40">
                   <div className="flex flex-col items-center gap-4">
                     <Loader2 className="h-8 w-8 animate-spin text-white" />
-                    <p className="text-white text-sm">
-                      Učitava se slika... Evo samo sekundica...
-                    </p>
+                    <p className="text-white text-sm">Loading image...</p>
                   </div>
                 </div>
               )}
