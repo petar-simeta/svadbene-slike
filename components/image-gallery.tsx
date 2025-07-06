@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +38,10 @@ export default function ImageGallery({ showTags }: ImageGalleryProps) {
   const [error, setError] = useState<string | null>(null);
   const [totalImages, setTotalImages] = useState(0);
 
+  // Preloading cache
+  const preloadedImages = useRef<Map<string, HTMLImageElement>>(new Map());
+  const preloadQueue = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     fetchImages();
   }, []);
@@ -68,6 +72,62 @@ export default function ImageGallery({ showTags }: ImageGalleryProps) {
 
     setFilteredImages(filtered);
   }, [searchParams, images]);
+
+  // Generate optimized Cloudinary URL
+  const getOptimizedImageUrl = useCallback((publicId: string, width = 1200) => {
+    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+    return `https://res.cloudinary.com/${cloudName}/image/upload/c_fit,w_${width},q_auto,f_auto/${publicId}`;
+  }, []);
+
+  // Preload images around current index
+  const preloadImages = useCallback(
+    (centerIndex: number) => {
+      const preloadRange = 2; // Preload 2 images before and after
+
+      for (
+        let i = centerIndex - preloadRange;
+        i <= centerIndex + preloadRange;
+        i++
+      ) {
+        const index = (i + filteredImages.length) % filteredImages.length;
+        if (index >= 0 && index < filteredImages.length) {
+          const image = filteredImages[index];
+          const imageUrl = getOptimizedImageUrl(image.public_id);
+
+          // Skip if already preloaded or in queue
+          if (
+            preloadedImages.current.has(imageUrl) ||
+            preloadQueue.current.has(imageUrl)
+          ) {
+            continue;
+          }
+
+          preloadQueue.current.add(imageUrl);
+
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          img.onload = () => {
+            preloadedImages.current.set(imageUrl, img);
+            preloadQueue.current.delete(imageUrl);
+          };
+          img.onerror = () => {
+            preloadQueue.current.delete(imageUrl);
+          };
+          img.src = imageUrl;
+        }
+      }
+
+      // Clean up old preloaded images (keep only recent ones)
+      if (preloadedImages.current.size > 10) {
+        const entries = Array.from(preloadedImages.current.entries());
+        const toDelete = entries.slice(0, entries.length - 10);
+        toDelete.forEach(([url]) => {
+          preloadedImages.current.delete(url);
+        });
+      }
+    },
+    [filteredImages, getOptimizedImageUrl]
+  );
 
   // Keyboard navigation
   useEffect(() => {
@@ -124,11 +184,15 @@ export default function ImageGallery({ showTags }: ImageGalleryProps) {
   };
 
   const openModal = (image: GalleryImage) => {
-    setSelectedImage(image);
-    setCurrentIndex(
-      filteredImages.findIndex((img) => img.public_id === image.public_id)
+    const index = filteredImages.findIndex(
+      (img) => img.public_id === image.public_id
     );
+    setSelectedImage(image);
+    setCurrentIndex(index);
     setImageLoading(true);
+
+    // Start preloading surrounding images
+    preloadImages(index);
   };
 
   const closeModal = () => {
@@ -145,6 +209,9 @@ export default function ImageGallery({ showTags }: ImageGalleryProps) {
 
     setCurrentIndex(newIndex);
     setSelectedImage(filteredImages[newIndex]);
+
+    // Preload images around new position
+    preloadImages(newIndex);
   };
 
   const handleImageLoad = () => {
@@ -176,9 +243,9 @@ export default function ImageGallery({ showTags }: ImageGalleryProps) {
     return (
       <div className="text-center py-12">
         <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-        <p className="text-muted-foreground">Učitavaju se dodatne slike...</p>
+        <p className="text-muted-foreground">Učitavaju se sve slike...</p>
         <p className="text-sm text-muted-foreground mt-2">
-          Možda potraje par sekundica, ali evoooo.....
+          Možda potraje par sekundica, ali samo što nije.
         </p>
       </div>
     );
@@ -187,10 +254,10 @@ export default function ImageGallery({ showTags }: ImageGalleryProps) {
   if (error) {
     return (
       <div className="text-center py-12">
-        <p className="text-red-500 text-lg mb-4">Error loading images</p>
+        <p className="text-red-500 text-lg mb-4">Upsić, error neki...</p>
         <p className="text-muted-foreground mb-4">{error}</p>
         <Button onClick={fetchImages} className="mt-4">
-          Try Again
+          Pokušaj ponovno
         </Button>
       </div>
     );
@@ -200,15 +267,15 @@ export default function ImageGallery({ showTags }: ImageGalleryProps) {
     return (
       <div className="text-center py-12">
         <p className="text-muted-foreground text-lg">
-          No images found matching your criteria.
+          Hmm, nema slika s takvim filterom.
         </p>
         <p className="text-sm text-muted-foreground mt-2">
-          Try a different category or search term.
+          Probaj neku drugu kategoriju ili tag.
         </p>
         <div className="mt-4 text-sm text-muted-foreground">
-          <p>Total images loaded: {totalImages}</p>
-          <p>Current filters:</p>
-          <p>Category: {searchParams.get("category") || "all"}</p>
+          <p>Ukupno slika učitano: {totalImages}</p>
+          <p>Trenutni filteri:</p>
+          <p>Kategorija: {searchParams.get("category") || "all"}</p>
           <p>Search: {searchParams.get("search") || "none"}</p>
         </div>
       </div>
@@ -274,7 +341,9 @@ export default function ImageGallery({ showTags }: ImageGalleryProps) {
                 <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-40">
                   <div className="flex flex-col items-center gap-4">
                     <Loader2 className="h-8 w-8 animate-spin text-white" />
-                    <p className="text-white text-sm">Loading image...</p>
+                    <p className="text-white text-sm">
+                      Učitavanje slike... Samo sekundica...
+                    </p>
                   </div>
                 </div>
               )}
@@ -327,7 +396,10 @@ export default function ImageGallery({ showTags }: ImageGalleryProps) {
               {/* Main image */}
               <div className="w-full h-full flex items-center justify-center p-8">
                 <img
-                  src={`https://res.cloudinary.com/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload/c_fit,w_1920,h_1080,q_auto,f_auto/${selectedImage.public_id}`}
+                  src={
+                    getOptimizedImageUrl(selectedImage.public_id, 1200) ||
+                    "/placeholder.svg"
+                  }
                   alt={selectedImage.context?.alt || "Gallery image"}
                   className="max-w-[90vw] max-h-[90vh] object-contain"
                   onLoad={handleImageLoad}
@@ -358,7 +430,7 @@ export default function ImageGallery({ showTags }: ImageGalleryProps) {
                       {currentIndex + 1} of {filteredImages.length}
                     </p>
                     <p className="text-white/50 text-xs">
-                      Use ← → arrow keys to navigate • ESC to close
+                      Koristi ← → strelice za navigaciju • ESC za izlazak
                     </p>
                   </div>
                 </div>
