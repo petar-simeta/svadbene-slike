@@ -74,7 +74,7 @@ export default function ImageGallery({ showTags }: ImageGalleryProps) {
   }, [searchParams, images]);
 
   // Generate optimized Cloudinary URL
-  const getOptimizedImageUrl = useCallback((publicId: string, width = 1200) => {
+  const getOptimizedImageUrl = useCallback((publicId: string, width = 1600) => {
     const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
     return `https://res.cloudinary.com/${cloudName}/image/upload/c_fit,w_${width},q_auto,f_auto/${publicId}`;
   }, []);
