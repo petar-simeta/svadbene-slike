@@ -79,6 +79,13 @@ export default function ImageGallery({ showTags }: ImageGalleryProps) {
     return `https://res.cloudinary.com/${cloudName}/image/upload/c_fit,w_${width},q_auto,f_auto/${publicId}`;
   }, []);
 
+  // Get first 3 characters of image name after removing number prefix
+  const getImageShortName = useCallback((publicId: string) => {
+    // Remove number prefix (like "001_") and get first 3 chars
+    const nameWithoutNumber = publicId;
+    return "slika_" + nameWithoutNumber.substring(0, 3).toUpperCase();
+  }, []);
+
   // Preload images around current index
   const preloadImages = useCallback(
     (centerIndex: number) => {
@@ -407,10 +414,11 @@ export default function ImageGallery({ showTags }: ImageGalleryProps) {
                 />
               </div>
 
-              {/* Image info overlay */}
-              {showTags && (
-                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6">
-                  <div className="flex flex-wrap gap-2 mb-2">
+              {/* Image info overlay - ALWAYS VISIBLE */}
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6">
+                {/* Tags section - only if showTags is true */}
+                {showTags && (
+                  <div className="flex flex-wrap gap-2 mb-3">
                     {selectedImage.tags && selectedImage.tags.length > 0 ? (
                       selectedImage.tags.map((tag) => (
                         <Badge
@@ -422,19 +430,27 @@ export default function ImageGallery({ showTags }: ImageGalleryProps) {
                         </Badge>
                       ))
                     ) : (
-                      <span className="text-white/70 text-sm">No tags</span>
+                      <span className="text-white/70 text-sm">Nema tagova</span>
                     )}
                   </div>
-                  <div className="flex justify-between items-center">
+                )}
+
+                {/* Image info - ALWAYS VISIBLE */}
+                <div className="flex justify-between items-center mb-2">
+                  <div className="flex flex-col gap-1">
                     <p className="text-white/70 text-sm">
-                      {currentIndex + 1} of {filteredImages.length}
+                      {currentIndex + 1} od {filteredImages.length}
                     </p>
-                    <p className="text-white/50 text-xs">
-                      Koristi ← → strelice za navigaciju • ESC za izlazak
+                    <p className="text-white/70 text-sm">
+                      <span className="text-white/50">Ime/broj slike:</span>{" "}
+                      {getImageShortName(selectedImage.public_id)}
                     </p>
                   </div>
+                  <p className="text-white/50 text-xs text-right">
+                    Koristi ← → strelice za navigaciju <br /> ESC za izlazak
+                  </p>
                 </div>
-              )}
+              </div>
             </div>
           )}
         </DialogContent>
